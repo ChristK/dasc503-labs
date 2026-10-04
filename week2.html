@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DASC503 Data Lab 2 — interactive companion</title>
+<!-- Open the connections early: it saves a round trip on the first R download. -->
+<link rel="preconnect" href="https://webr.r-wasm.org" crossorigin>
+<link rel="preconnect" href="https://repo.r-wasm.org" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<!--
+  DASC503 Data Lab 2 — interactive companion (data.table)
+  =======================================================
+  Companion to DASC503_Week2_data.table_v2.Rmd, NOT a replacement.
+
+  Hosted at https://christk.github.io/dasc503-labs/week2.html and linked or
+  framed from Canvas. It must be SERVED (http/https), not opened from disk.
+
+  Scope deliberately matches the core of the handout: the DT[i, j, by] idea,
+  joins, and melt. Advanced material is left to the handout.
+
+  Design constraints, inherited from the Week 1 prototype:
+    * Single self-contained file, served from GitHub Pages. Canvas strips
+      scripts from uploaded HTML, so Canvas Files does NOT work; Canvas links to
+      or frames the github.io page instead.
+    * webR is version-PINNED, so a breaking change cannot land mid-term.
+    * No storage APIs of any kind, so nothing breaks under third-party storage
+      blocking in an iframe and there is no data-protection question. Student
+      code never leaves the browser.
+    * Degrades honestly: if webR cannot load, the multiple-choice, ordering and
+      spot-the-bug activities still work and say so.
+    * All data are real (OHID Fingertips), embedded inline so no second fetch.
+-->
+<style>
+  :root {
+    --ink:#22303C; --muted:#5A6672; --line:#DDE3E8; --bg:#FFFFFF;
+    --panel:#F7FAFC; --blue:#0072B2; --green:#009E73; --orange:#E69F00;
+    --red:#D55E00; --faint:#EDF2F6;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:18px 16px 60px; font-family:var(--sans); color:var(--ink);
+         background:var(--bg); line-height:1.55; font-size:15px; }
+  .wrap { max-width:860px; margin:0 auto; }
+  h1 { font-size:1.45rem; margin:0 0 4px; }
+  h2 { font-size:1.1rem; margin:34px 0 4px; padding-top:14px; border-top:2px solid var(--line); }
+  .sub { color:var(--muted); font-size:.9rem; margin:0 0 6px; }
+  code, pre, textarea, .val { font-family:var(--mono); }
+  pre { background:var(--faint); padding:10px 12px; border-radius:5px; overflow-x:auto;
+        font-size:.86rem; margin:8px 0; }
+  .card { border:1px solid var(--line); border-radius:7px; padding:14px 16px; margin:14px 0;
+          background:var(--panel); }
+  .q { font-weight:600; margin:0 0 8px; }
+  .opts { display:flex; flex-direction:column; gap:7px; margin:10px 0 0; }
+  .opt { text-align:left; padding:9px 12px; border:1px solid var(--line); border-radius:5px;
+         background:#fff; cursor:pointer; font-size:.93rem; font-family:var(--sans); color:var(--ink); }
+  .opt:hover:not(:disabled) { border-color:var(--blue); }
+  .opt:disabled { cursor:default; opacity:.95; }
+  .opt.right { border-color:var(--green); background:#E9F7F3; font-weight:600; }
+  .opt.wrong { border-color:var(--red); background:#FBEDE6; }
+  .fb { margin-top:10px; padding:10px 12px; border-radius:5px; font-size:.9rem; display:none; }
+  .fb.ok  { background:#E9F7F3; border-left:4px solid var(--green); display:block; }
+  .fb.no  { background:#FBEDE6; border-left:4px solid var(--red);   display:block; }
+  textarea { width:100%; border:1px solid var(--line); border-radius:5px; padding:9px 11px;
+             font-size:.88rem; resize:vertical; background:#fff; color:var(--ink); }
+  button.run { background:var(--blue); color:#fff; border:0; border-radius:5px; padding:8px 16px;
+               font-size:.9rem; cursor:pointer; font-family:var(--sans); font-weight:600; }
+  button.run:hover:not(:disabled) { background:#005a8e; }
+  button.run:disabled { background:#9BA8B4; cursor:not-allowed; }
+  button.ghost { background:#fff; color:var(--blue); border:1px solid var(--blue); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:9px; }
+  .out { background:#1B252E; color:#E8EEF3; padding:10px 12px; border-radius:5px;
+         font-family:var(--mono); font-size:.83rem; white-space:pre-wrap; overflow-x:auto;
+         margin-top:9px; display:none; }
+  .out.show { display:block; }
+  .out .err { color:#FF9E7A; }
+  #status { padding:9px 13px; border-radius:5px; font-size:.88rem; margin:0 0 14px;
+            background:#FFF6E5; border-left:4px solid var(--orange); }
+  #status.ready { background:#E9F7F3; border-left-color:var(--green); }
+  #status.fail  { background:#FBEDE6; border-left-color:var(--red); }
+  .steps { list-style:none; padding:0; margin:10px 0 0; }
+  .steps li { border:1px solid var(--line); background:#fff; border-radius:5px; padding:8px 11px;
+              margin-bottom:6px; cursor:grab; font-family:var(--mono); font-size:.85rem; }
+  .steps li.drag { opacity:.4; }
+  .tag { display:inline-block; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em;
+         color:#fff; background:var(--blue); padding:2px 7px; border-radius:3px; vertical-align:middle;
+         margin-right:8px; font-weight:700; }
+  .tag.grey { background:var(--muted); }
+  table.mini { border-collapse:collapse; font-family:var(--mono); font-size:.82rem; margin:8px 0; }
+  table.mini th, table.mini td { border:1px solid var(--line); padding:3px 9px; text-align:left; }
+  table.mini th { background:var(--ink); color:#fff; font-weight:600; }
+  .score { font-weight:600; color:var(--blue); }
+  .hint { font-size:.84rem; color:var(--muted); margin-top:6px; }
+  /* Shown in the raw HTML and removed by script once the page has rendered.
+     If scripts are blocked, it is the only thing the student sees, so the page
+     is never silently blank. */
+  #noscript-notice { border:1px solid var(--orange); background:#FFF6E5; border-radius:6px;
+                     padding:12px 15px; margin:0 0 16px; font-size:.92rem; }
+  #noscript-notice strong { display:block; margin-bottom:4px; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Data Lab 2 — interactive companion</h1>
+<p class="sub">Work through the handout first. This page lets you test yourself on the three
+core ideas: <code>DT[i, j, by]</code>, joins, and <code>melt()</code>. Nothing you type leaves your browser.</p>
+
+<div id="noscript-notice">
+  <strong>This page needs JavaScript, and it looks as though it is being blocked.</strong>
+  If this notice is still here after a moment, open the page directly instead:
+  <a href="https://christk.github.io/dasc503-labs/week2.html" target="_blank" rel="noopener">christk.github.io/dasc503-labs/week2.html</a>
+</div>
+
+<div id="status">Loading…</div>
+
+<p style="font-size:.9rem">Three small tables are loaded and ready. All figures are real:
+alcohol-related mortality for eight English local authorities (OHID Fingertips).</p>
+
+<table class="mini">
+<tr><th>table</th><th>columns</th><th>rows</th></tr>
+<tr><td>mort</td><td>area, year, sex, rate, deaths</td><td>48</td></tr>
+<tr><td>imd</td><td>area, imd</td><td>6</td></tr>
+<tr><td>region</td><td>area, region</td><td>8</td></tr>
+</table>
+<p class="hint">Note that <code>imd</code> has only 6 rows for 8 areas. That gap is real, and one of the questions below asks about it.</p>
+
+<h2>1 · Predict, then run</h2>
+<p class="sub">Commit to an answer first. Then run the real code and see.</p>
+<div id="predict"></div>
+
+<h2>2 · Multiple choice</h2>
+<p class="sub">Each wrong answer explains that particular misconception, so a wrong guess is worth something.</p>
+<div id="mcq"></div>
+
+<h2>3 · Complete the code</h2>
+<p class="sub">Checked by <em>running</em> your line and comparing the result, so any correct solution passes.</p>
+<div id="fill"></div>
+
+<h2>4 · Spot the bug</h2>
+<div id="bug"></div>
+
+<h2>5 · Put the script in order</h2>
+<div id="order"></div>
+
+<h2>6 · Free console</h2>
+<p class="sub"><code>mort</code>, <code>imd</code> and <code>region</code> are loaded, with <code>data.table</code> attached.</p>
+<div class="card">
+  <textarea id="freeCode" rows="4">mort[sex == "Persons", .(mean_rate = mean(rate)), keyby = area]</textarea>
+  <div class="row">
+    <button class="run" id="freeRun">Run</button>
+    <button class="run ghost" id="freeReset">Reset tables</button>
+    <span class="hint" id="freeHint">Shift+Enter also runs.</span>
+  </div>
+  <div class="out" id="freeOut"></div>
+</div>
+
+<p style="font-size:.85rem;color:var(--muted);margin-top:34px;border-top:1px solid var(--line);padding-top:12px">
+Data: OHID Fingertips, indicators 93763 and 91872. Contains public sector information licensed
+under the Open Government Licence v3.0. R runs entirely in your browser via
+<a href="https://docs.r-wasm.org/webr/latest/" target="_blank" rel="noopener">webR</a>; no code or data is sent anywhere.
+</p>
+</div>
+
+<script type="module">
+// ===========================================================================
+//  Embedded data (real OHID Fingertips extracts)
+// ===========================================================================
+const CSV_MORT = "area,year,sex,rate,deaths\nBarnsley,2022,Male,71.57,83\nBarnsley,2022,Persons,47.05,115\nBarnsley,2023,Male,69.92,83\nBarnsley,2023,Persons,44.84,112\nBarnsley,2024,Male,67.88,81\nBarnsley,2024,Persons,44.72,113\nBath and North East Somerset,2022,Male,58.04,51\nBath and North East Somerset,2022,Persons,38.66,71\nBath and North East Somerset,2023,Male,50.67,45\nBath and North East Somerset,2023,Persons,35.6,66\nBath and North East Somerset,2024,Male,44.16,40\nBath and North East Somerset,2024,Persons,31.09,59\nBlackpool,2022,Male,103.11,74\nBlackpool,2022,Persons,71.06,105\nBlackpool,2023,Male,112.99,81\nBlackpool,2023,Persons,74.65,111\nBlackpool,2024,Male,101.02,73\nBlackpool,2024,Persons,68.29,103\nCumberland,2022,Male,53.36,73\nCumberland,2022,Persons,35.85,101\nCumberland,2023,Male,55.62,77\nCumberland,2023,Persons,37.44,107\nCumberland,2024,Male,53.55,75\nCumberland,2024,Persons,36.09,105\nDorset,2022,Male,44.14,86\nDorset,2022,Persons,28.41,116\nDorset,2023,Male,46.66,92\nDorset,2023,Persons,30.66,127\nDorset,2024,Male,45.99,92\nDorset,2024,Persons,30.4,128\nKnowsley,2022,Male,80.52,58\nKnowsley,2022,Persons,54.66,82\nKnowsley,2023,Male,86.05,63\nKnowsley,2023,Persons,57.98,88\nKnowsley,2024,Male,74.32,55\nKnowsley,2024,Persons,51.83,79\nLiverpool,2022,Male,78.19,158\nLiverpool,2022,Persons,55.35,230\nLiverpool,2023,Male,83.66,171\nLiverpool,2023,Persons,59.87,248\nLiverpool,2024,Male,77.34,160\nLiverpool,2024,Persons,54.94,230\nWestminster,2022,Male,53.14,52\nWestminster,2022,Persons,34.55,70\nWestminster,2023,Male,55.06,55\nWestminster,2023,Persons,35.71,74\nWestminster,2024,Male,50.87,52\nWestminster,2024,Persons,33.85,72\n";
+const CSV_IMD = "area,imd\nBarnsley,29.568\nBath and North East Somerset,12.094\nBlackpool,45.032\nKnowsley,45.686\nLiverpool,41.126\nWestminster,21.842\n";
+const CSV_REGION = "area,region\nBarnsley,Yorkshire and the Humber\nBath and North East Somerset,South West\nBlackpool,North West\nCumberland,North West\nDorset,South West\nKnowsley,North West\nLiverpool,North West\nWestminster,London\n";
+
+// ===========================================================================
+//  webR boot. Version is PINNED so a breaking change cannot land mid-term.
+//  WEBR_BASE is overridable via ?webr= only to allow local testing; the
+//  default is the public CDN.
+// ===========================================================================
+const params    = new URLSearchParams(location.search);
+const WEBR_VERSION = "0.6.0";
+const REPO_BASE = params.get("repo") || "https://repo.r-wasm.org";
+
+// Two independent sources for webR. jsDelivr mirrors the npm package and serves
+// byte-identical assets, so it is a real failover rather than a token one.
+// NOTE the module entry points differ: jsDelivr's `dist/webr.mjs` is the Node
+// build and throws in a browser; `+esm` is the browser build.
+const MIRRORS = params.get("webr")
+  ? [{ name: "local", module: params.get("webr") + "webr.mjs", base: params.get("webr") }]
+  : [
+      { name: "webR CDN", module: `https://webr.r-wasm.org/v${WEBR_VERSION}/webr.mjs`,
+        base: `https://webr.r-wasm.org/v${WEBR_VERSION}/` },
+      { name: "jsDelivr", module: `https://cdn.jsdelivr.net/npm/webr@${WEBR_VERSION}/+esm`,
+        base: `https://cdn.jsdelivr.net/npm/webr@${WEBR_VERSION}/dist/` }
+    ];
+
+const statusEl = document.getElementById("status");
+
+// One shared engine. Everything that needs R awaits `engine.promise`, so R is
+// downloaded exactly once however many Run buttons are pressed.
+const engine = {
+  webR: null, promise: null, ready: false,
+  loud: false,      // true once a student is actually waiting on R
+  error: null
+};
+
+const SETUP_R = `
+library(data.table)
+mort   <- fread(text = ${JSON.stringify(CSV_MORT)})
+imd    <- fread(text = ${JSON.stringify(CSV_IMD)})
+region <- fread(text = ${JSON.stringify(CSV_REGION)})
+invisible(NULL)
+`;
+
+function setStatus(kind, html) {
+  statusEl.className = kind;              // "" | "ready" | "fail"
+  statusEl.innerHTML = html;
+}
+
+/** Reject if `p` has not settled within `ms`. A stalled download is worse than
+ *  a failed one, because nothing ever tells the student what happened. */
+function withTimeout(p, ms, label) {
+  let t;
+  return Promise.race([
+    p.finally(() => clearTimeout(t)),
+    new Promise((_, rej) => { t = setTimeout(
+      () => rej(new Error(`${label} did not finish within ${Math.round(ms/1000)}s`)), ms); })
+  ]);
+}
+
+/** Cheap liveness check: ask for a single byte before committing to 18 MB. */
+async function reachable(url, ms = 8000) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(url, { headers: { Range: "bytes=0-0" },
+                                 signal: ctl.signal, cache: "no-store" });
+    return r.ok || r.status === 206;
+  } catch { return false; }
+  finally { clearTimeout(t); }
+}
+
+async function startOnce(mirror) {
+  const { WebR } = await withTimeout(import(/* @vite-ignore */ mirror.module),
+                                     60000, "loading webR");
+  const w = new WebR({ baseUrl: mirror.base, repoUrl: REPO_BASE });
+  // webR prefers a SharedArrayBuffer channel but falls back to PostMessage when
+  // COOP/COEP are absent -- which is the case for anything framed from Canvas.
+  await withTimeout(w.init(), 180000, "starting R");
+  if (engine.loud) setStatus("", "R is running. Fetching <code>data.table</code>\u2026");
+  await withTimeout(w.installPackages(["data.table"]), 120000, "installing data.table");
+  await w.evalRVoid(SETUP_R);
+  return w;
+}
+
+async function startR() {
+  const failures = [];
+  for (const m of MIRRORS) {
+    if (MIRRORS.length > 1 && !(await reachable(m.module))) {
+      failures.push(`${m.name}: unreachable`);
+      continue;
+    }
+    for (let attempt = 1; attempt <= 2; attempt++) {     // two goes per mirror
+      try {
+        const w = await startOnce(m);
+        engine.webR = w; engine.ready = true;
+        return w;
+      } catch (e) {
+        // "NotReadableError: The I/O read operation failed" is WebKit's wording
+        // for a network read dying part-way through. It is transient, so the
+        // retry below is exactly the right response to it.
+        failures.push(`${m.name} attempt ${attempt}: ${String(e).slice(0, 90)}`);
+      }
+    }
+  }
+  const err = new Error(failures.join(" | "));
+  engine.error = err;
+  throw err;
+}
+
+/** The single entry point. `quiet` = speculative background start. */
+function getR({ quiet = false } = {}) {
+  if (!quiet) {
+    engine.loud = true;
+    // If a previous attempt failed, let an explicit action try again. Caching
+    // the rejection would mean a student who hit a momentary network problem
+    // could never recover without reloading the page.
+    if (engine.error) { engine.error = null; engine.promise = null; }
+    if (!engine.ready) {
+      setStatus("", "Starting R in your browser\u2026 the first run downloads about 21\u00a0MB.");
+    }
+  }
+  if (!engine.promise) engine.promise = startR();
+  return engine.promise;
+}
+
+function showReady() {
+  setStatus("ready", `Ready \u2014 R ${WEBR_VERSION} with <code>data.table</code>, running in your browser.`);
+  document.getElementById("freeHint").textContent = "Shift+Enter also runs.";
+}
+
+function showFailure(e) {
+  setStatus("fail",
+    "<strong>R could not start in this browser.</strong> " +
+    "This usually means the network, or a content-security policy, is blocking " +
+    "<code>webr.r-wasm.org</code> and <code>cdn.jsdelivr.net</code>. The multiple-choice, " +
+    "spot-the-bug and ordering questions below still work normally, and " +
+    "<strong>nothing you have answered is affected</strong>. " +
+    "<span style='color:var(--muted)'>(" + String(e && e.message || e).slice(0, 150) + ")</span>" +
+    "<div class='row'><button class='run' id='retryR'>Try again</button></div>");
+  // A dropped download is usually transient, so always offer another go rather
+  // than making the student reload the page.
+  const r = document.getElementById("retryR");
+  if (r) r.onclick = async () => {
+    r.disabled = true; r.textContent = "trying\u2026";
+    if (await needR()) showReady();
+  };
+}
+
+/** Await R for a student action. Returns false if R is unavailable. */
+async function needR() {
+  try { await getR(); showReady(); return true; }
+  catch (e) { showFailure(e); return false; }
+}
+
+function boot() {
+  document.getElementById("noscript-notice")?.remove();   // scripts clearly run
+
+  // Opening the file straight from disk cannot work: a file:// page has origin
+  // "null", so the browser blocks the cross-origin module import that loads
+  // webR. Say so specifically rather than blaming the network.
+  if (location.protocol !== "http:" && location.protocol !== "https:") {
+    setStatus("fail",
+      "<strong>This page has to be served over http(s); it cannot run R when opened " +
+      "straight from disk.</strong> A <code>file://</code> page has no origin, so the " +
+      "browser blocks the module that loads R. Nothing is wrong with the file." +
+      "<br><br>Open the hosted copy instead: " +
+      "<a href='https://christk.github.io/dasc503-labs/week2.html'>christk.github.io/dasc503-labs/week2.html</a>." +
+      "<br><br>The multiple-choice, spot-the-bug and ordering questions below work regardless.");
+    return;
+  }
+
+  setStatus("", "Getting R ready in the background \u2014 you can start answering now.");
+
+  // Speculative background start, so that by the time a student has read the
+  // first question and pressed Run, R is usually already there. Skipped when
+  // the browser reports a metered or data-saving connection.
+  if (navigator.connection && navigator.connection.saveData) {
+    setStatus("", "Data Saver is on, so R will start when you first press Run.");
+    return;
+  }
+  const kick = () => getR({ quiet: true }).then(showReady).catch(() => {
+    // A background failure stays silent: nobody is waiting yet, and a red
+    // banner for a problem the student has not met is just noise. The next
+    // Run press will surface it through needR().
+    if (!engine.loud) setStatus("", "R will start when you first press Run.");
+  });
+  if ("requestIdleCallback" in window) requestIdleCallback(kick, { timeout: 2500 });
+  else setTimeout(kick, 400);                 // Safari has no requestIdleCallback
+}
+
+/** Run R code, returning captured output as text. Errors are surfaced, never swallowed. */
+async function runR(code) {
+  const w = await getR();
+  const shelter = await new w.Shelter();
+  try {
+    const res = await shelter.captureR(code, { withAutoprint: true, captureStreams: true });
+    const txt = res.output.filter(o => o.type === "stdout" || o.type === "stderr")
+                          .map(o => o.data).join("\n");
+    return txt.length ? txt : "(no output)";
+  } finally {
+    await shelter.purge();
+  }
+}
+
+/** Evaluate an expression and return a canonical string, for answer checking. */
+async function valueOf(code) {
+  const wrapped = `local({ .v <- ${code}
+    if (is.data.frame(.v)) paste(capture.output(print(.v)), collapse="\\n")
+    else paste(format(.v, digits = 6), collapse = "|") })`;
+  const w = await getR();
+  const shelter = await new w.Shelter();
+  try {
+    const r = await shelter.evalR(wrapped);
+    return (await r.toString()).trim();
+  } finally {
+    await shelter.purge();
+  }
+}
+
+function show(el, text, isErr) {
+  el.className = "out show";
+  el.innerHTML = isErr ? `<span class="err">${esc(text)}</span>` : esc(text);
+}
+const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+// ===========================================================================
+//  Activity 1 — predict, then run
+// ===========================================================================
+const PREDICT = [
+  {
+    code: `mort[sex == "Persons" & rate > 50]`,
+    q: "How many rows come back?",
+    opts: ["3", "6", "9", "12"], right: 2,
+    why: "Nine. Blackpool, Knowsley and Liverpool each exceed 50 in all three years. " +
+         "Note the filter keeps ROWS, and returns a data.table, never a bare vector."
+  },
+  {
+    code: `mort[, .N, by = sex]`,
+    q: "What shape is the result?",
+    opts: ["a single number", "2 rows × 2 columns", "48 rows × 2 columns", "2 rows × 1 column"],
+    right: 1,
+    why: "One row per group, and two columns: the grouping column `sex`, plus `N`. " +
+         "`by` always puts the grouping column in the output."
+  },
+  {
+    code: `class(mort[, rate])`,
+    q: "Is a bare column name a vector or a data.table?",
+    opts: ['"data.table" "data.frame"', '"numeric"', '"list"', '"character"'],
+    right: 1,
+    why: "A bare name in j gives you a VECTOR. Wrap it in .() — `mort[, .(rate)]` — to get a table back."
+  }
+];
+
+// ===========================================================================
+//  Activity 2 — multiple choice, with per-option feedback
+// ===========================================================================
+const MCQ = [
+  {
+    q: "In <code>DT[i, j, by]</code>, what happens in which order?",
+    opts: [
+      "compute j, then filter with i, then group",
+      "filter with i, then group by, then compute j for each group",
+      "group by, then filter with i, then compute j",
+      "all three happen at once, order does not matter"
+    ], right: 1,
+    fb: [
+      "Not quite — i comes first. If j were computed first you would be computing over rows you meant to discard.",
+      "Yes. Keep the rows i selects, form the groups, then run j once per group.",
+      "Close, but i is applied before grouping — that is what makes filtering cheap.",
+      "Order does matter: i restricts what j ever sees, which is both a correctness and a speed issue."
+    ]
+  },
+  {
+    q: "You run <code>region[mort, on = \"area\"]</code>. Whose rows do you get back?",
+    opts: [
+      "the rows of region, the outer table",
+      "the rows of mort, the table inside the brackets",
+      "only rows present in both",
+      "all rows from both tables"
+    ], right: 1,
+    fb: [
+      "This is the single most common misconception. You get the rows of the table INSIDE the brackets, not the outer one.",
+      "Correct. Read X[Y] as: for every row of Y, go and find its match in X. The result has Y's rows.",
+      "That would need nomatch = NULL. By default unmatched rows are kept, with NA filled in.",
+      "That is a full outer join, which X[Y, on=] does not do — merge(all = TRUE) is easier for that."
+    ]
+  },
+  {
+    q: "What is the difference between <code>mort[, rate]</code> and <code>mort[, .(rate)]</code>?",
+    opts: [
+      "no difference, .() is just decoration",
+      "the first is a vector, the second is a data.table",
+      "the first is faster",
+      "the second drops missing values"
+    ], right: 1,
+    fb: [
+      "There is a real difference, and it changes what you can do next.",
+      "Exactly. .() is shorthand for list(), and returning a list from j gives you a table.",
+      "Speed is not the point here — the return TYPE is what differs.",
+      "Neither form touches missing values. That is what na.rm is for."
+    ]
+  },
+  {
+    q: "<code>mort[!imd, on = \"area\"]</code> returns…",
+    opts: [
+      "an error, because ! is not valid there",
+      "rows of mort whose area has NO match in imd",
+      "rows of mort that DO match imd",
+      "the imd rows with no match in mort"
+    ], right: 1,
+    fb: [
+      "It is valid — ! in front of the inside table is the anti-join.",
+      "Right. This is how you audit a join instead of trusting it. Always run one.",
+      "That is the ordinary join. The ! reverses it.",
+      "It returns rows of the OUTER table, mort, with no partner — not the other way round."
+    ]
+  },
+  {
+    q: "In <code>melt()</code>, what do <code>measure.vars</code> do?",
+    opts: [
+      "name the columns to keep unchanged, one per row",
+      "name the columns to stack into a single value column",
+      "set the names of the two new columns",
+      "choose which rows to keep"
+    ], right: 1,
+    fb: [
+      "That is id.vars. measure.vars are the ones that get stacked.",
+      "Correct. Their names become entries in `variable`, their contents stack in `value`.",
+      "That is variable.name and value.name.",
+      "melt() reshapes; it does not filter rows."
+    ]
+  },
+  {
+    q: "After <code>region[mort, on = \"area\"]</code>, what does adding <code>nomatch = NULL</code> change?",
+    opts: [
+      "it fills unmatched rows with 0 instead of NA",
+      "it drops rows that had no match, leaving only matches",
+      "it throws an error when a row does not match",
+      "it makes the join faster but changes nothing else"
+    ], right: 1,
+    fb: [
+      "It does not substitute a value — it removes the row entirely.",
+      "Yes. That turns the default into an inner join. Check how many rows you lost.",
+      "It fails silently rather than loudly, which is exactly why you should anti-join too.",
+      "It changes the result, not just the speed — you can lose rows."
+    ]
+  }
+];
+
+// ===========================================================================
+//  Activity 3 — complete the code, checked by running it
+//  Targets are chosen so that a near-miss (e.g. > vs >=) gives a DIFFERENT
+//  answer; otherwise the check would be vacuous.
+// ===========================================================================
+const FILL = [
+  {
+    q: "Keep only the rows for males in 2024. (There are 8.)",
+    stub: `mort[____, .N]`,
+    check: `mort[sex == "Male" & year == 2024, .N]`,
+    hint: "Two conditions joined with &.",
+  },
+  {
+    q: "Count the rows for each area. Every area should show 6.",
+    stub: `mort[, ____, by = area]`,
+    check: `mort[, .N, by = area]`,
+    hint: "There is a special symbol for the number of rows in a group.",
+  },
+  {
+    q: "Blackpool's rate exceeds 70 in exactly two of the three years, for persons. Filter to find them — mind the boundary.",
+    stub: `mort[area == "Blackpool" & sex == "Persons" & ____, .N]`,
+    check: `mort[area == "Blackpool" & sex == "Persons" & rate > 70, .N]`,
+    hint: "2022 is 71.06 and 2023 is 74.65, but 2024 is 68.29. Strict or non-strict?",
+  },
+  {
+    q: "Attach each area's region to the 2024 persons rows, keeping every one of those rows.",
+    stub: `region[____, on = "area"]`,
+    check: `region[mort[year == 2024 & sex == "Persons"], on = "area"]`,
+    hint: "The table whose rows you want to keep goes INSIDE the brackets.",
+  },
+  {
+    q: "Which areas in mort have no IMD score? Use an anti-join.",
+    stub: `unique(mort[____, on = "area"], by = "area")[, area]`,
+    check: `unique(mort[!imd, on = "area"], by = "area")[, area]`,
+    hint: "Put ! in front of the inside table.",
+  }
+];
+
+// ===========================================================================
+//  Activity 4 — spot the bug
+// ===========================================================================
+const BUGS = [
+  {
+    code: `mort[rate == NA, .N]`,
+    q: "This always returns 0, even when there are missing rates. Why?",
+    opts: [
+      "NA is not a number so == cannot be used on it",
+      "comparing anything to NA gives NA, not TRUE, so no row is selected",
+      "you need quotes: rate == \"NA\"",
+      "the column is called Rate, not rate"
+    ], right: 1,
+    fb: [
+      "Close in spirit, but the precise reason is about what == returns.",
+      "Right. `x == NA` is NA, never TRUE, so i selects nothing. Use is.na(rate) instead.",
+      "Quoting it looks for the literal text \"NA\", which is a different bug again.",
+      "The column name is fine — the comparison is the problem."
+    ]
+  },
+  {
+    code: `imd[mort, on = "area"]\n# expected 8 areas, got 48 rows`,
+    q: "What has gone wrong here?",
+    opts: [
+      "the join key is misspelled",
+      "nothing is wrong — mort has 48 rows, and a join returns the inside table's rows",
+      "imd needs a key set first",
+      "it should be nomatch = NULL"
+    ], right: 1,
+    fb: [
+      "The key is fine; both tables have an `area` column.",
+      "Correct. mort has 48 rows and mort is inside the brackets, so 48 rows come back. The expectation was wrong, not the code.",
+      "Keys are not required — on= does the job without one.",
+      "That would DROP rows, giving fewer than 48, not the 8 that were expected."
+    ]
+  },
+  {
+    code: `melt(wide, measure.vars = c("Male", "Persons"))\n# the area column has vanished`,
+    q: "Why has area disappeared?",
+    opts: [
+      "melt always drops character columns",
+      "id.vars was not given, so melt guessed — and it guessed wrongly here",
+      "measure.vars cannot be character",
+      "you must call dcast first"
+    ], right: 1,
+    fb: [
+      "melt has no such rule; character columns are kept like any other.",
+      "Right. Omitting id.vars makes melt infer them. Name both, and it cannot guess wrong.",
+      "Character measure.vars are fine — the issue is what was left unstated.",
+      "dcast is the inverse operation; it has no bearing on this."
+    ]
+  }
+];
+
+// ===========================================================================
+//  Activity 5 — order the script
+// ===========================================================================
+const ORDER = {
+  q: "These five lines answer: <em>which region has the highest mean rate for persons in 2024?</em> Drag them into a working order.",
+  right: [
+    `library(data.table)`,
+    `mort <- fread("alcohol_mortality.csv")`,
+    `region <- fread("la_region_lookup.csv")`,
+    `joined <- region[mort[year == 2024 & sex == "Persons"], on = "area"]`,
+    `joined[, .(m = mean(rate)), keyby = region][order(-m)][1]`
+  ]
+};
+
+// ===========================================================================
+//  Rendering
+// ===========================================================================
+let score = 0, answered = 0;
+
+function card(html, needsR) {
+  const d = document.createElement("div");
+  d.className = "card";
+  if (needsR) d.setAttribute("data-needsr", "1");
+  d.innerHTML = html;
+  return d;
+}
+
+function optionSet(opts, right, fb, onDone) {
+  const wrap = document.createElement("div");
+  wrap.className = "opts";
+  const fbEl = document.createElement("div");
+  fbEl.className = "fb";
+  opts.forEach((label, i) => {
+    const b = document.createElement("button");
+    b.className = "opt"; b.type = "button"; b.innerHTML = label;
+    b.onclick = () => {
+      wrap.querySelectorAll("button").forEach(x => x.disabled = true);
+      const ok = i === right;
+      b.classList.add(ok ? "right" : "wrong");
+      if (!ok) wrap.children[right].classList.add("right");
+      fbEl.className = "fb " + (ok ? "ok" : "no");
+      fbEl.innerHTML = (fb && fb[i]) ? fb[i] : (ok ? "Correct." : "Not quite.");
+      answered++; if (ok) score++;
+      if (onDone) onDone(ok);
+    };
+    wrap.appendChild(b);
+  });
+  return { wrap, fbEl };
+}
+
+// --- Activity 1 -------------------------------------------------------------
+PREDICT.forEach((p, idx) => {
+  const c = card(`<p class="q"><span class="tag">predict</span>${p.q}</p><pre>${esc(p.code)}</pre>`, true);
+  const { wrap, fbEl } = optionSet(p.opts, p.right, null, () => { runBtn.disabled = false; });
+  c.appendChild(wrap); c.appendChild(fbEl);
+  const row = document.createElement("div"); row.className = "row";
+  const runBtn = document.createElement("button");
+  runBtn.className = "run"; runBtn.textContent = "Now run it for real"; runBtn.disabled = true;
+  // enabled by optionSet's onDone once the student has committed to an answer
+  const out = document.createElement("div"); out.className = "out";
+  runBtn.onclick = async () => {
+    runBtn.disabled = true; runBtn.textContent = "running…";
+    if (await needR()) {
+      try { show(out, await runR(p.code), false); }
+      catch (e) { show(out, String(e), true); }
+    } else {
+      show(out, "R is not available, so this cannot be run here. The explanation " +
+                "below still stands.", true);
+    }
+    runBtn.textContent = "Run again"; runBtn.disabled = false;
+    fbEl.innerHTML += `<br><br><strong>Why:</strong> ${p.why}`;
+  };
+  row.appendChild(runBtn); c.appendChild(row); c.appendChild(out);
+  document.getElementById("predict").appendChild(c);
+});
+
+// --- Activity 2 -------------------------------------------------------------
+MCQ.forEach(m => {
+  const c = card(`<p class="q"><span class="tag grey">choose</span>${m.q}</p>`);
+  const { wrap, fbEl } = optionSet(m.opts, m.right, m.fb);
+  c.appendChild(wrap); c.appendChild(fbEl);
+  document.getElementById("mcq").appendChild(c);
+});
+
+// --- Activity 3 -------------------------------------------------------------
+FILL.forEach(f => {
+  const c = card(`<p class="q"><span class="tag">complete</span>${f.q}</p>`, true);
+  const ta = document.createElement("textarea");
+  ta.rows = 2; ta.value = f.stub;
+  const row = document.createElement("div"); row.className = "row";
+  const b = document.createElement("button"); b.className = "run"; b.textContent = "Check";
+  const h = document.createElement("span"); h.className = "hint"; h.textContent = "";
+  const hb = document.createElement("button"); hb.className = "run ghost"; hb.textContent = "Hint";
+  hb.onclick = () => { h.textContent = f.hint; };
+  const out = document.createElement("div"); out.className = "out";
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = "checking…";
+    if (!(await needR())) {
+      // R is unavailable. Say so plainly -- do NOT report the answer as wrong,
+      // because we have no idea whether it is.
+      show(out, "R is not available, so your answer cannot be checked here. " +
+                "It has NOT been marked wrong.", true);
+      b.textContent = "Check"; b.disabled = false; return;
+    }
+    try {
+      if (ta.value.includes("____")) throw new Error("Replace ____ with your answer first.");
+      const want = await valueOf(f.check);     // reference value first
+      const mine = await valueOf(ta.value);    // then the student's
+      const ok = mine === want;
+      show(out, (ok ? "Correct.\n\n" : "Not the same answer yet.\n\n") +
+                "your result:\n" + mine + (ok ? "" : "\n\nexpected:\n" + want), !ok);
+      answered++; if (ok) score++;
+    } catch (e) { show(out, String(e).replace(/^Error:\s*/, ""), true); }
+    b.textContent = "Check"; b.disabled = false;
+  };
+  row.append(b, hb, h);
+  c.append(ta, row, out);
+  document.getElementById("fill").appendChild(c);
+});
+
+// --- Activity 4 -------------------------------------------------------------
+BUGS.forEach(g => {
+  const c = card(`<p class="q"><span class="tag grey">debug</span>${g.q}</p><pre>${esc(g.code)}</pre>`);
+  const { wrap, fbEl } = optionSet(g.opts, g.right, g.fb);
+  c.appendChild(wrap); c.appendChild(fbEl);
+  document.getElementById("bug").appendChild(c);
+});
+
+// --- Activity 5 -------------------------------------------------------------
+(function () {
+  const c = card(`<p class="q"><span class="tag grey">order</span>${ORDER.q}</p>`);
+  const ul = document.createElement("ul"); ul.className = "steps";
+  const shuffled = [3, 0, 4, 2, 1].map(i => ORDER.right[i]);   // fixed, not random
+  shuffled.forEach(t => {
+    const li = document.createElement("li");
+    li.draggable = true; li.textContent = t;
+    li.addEventListener("dragstart", () => { li.classList.add("drag"); ul._d = li; });
+    li.addEventListener("dragend", () => li.classList.remove("drag"));
+    li.addEventListener("dragover", e => {
+      e.preventDefault();
+      const d = ul._d; if (!d || d === li) return;
+      const r = li.getBoundingClientRect();
+      ul.insertBefore(d, (e.clientY - r.top) / r.height > .5 ? li.nextSibling : li);
+    });
+    ul.appendChild(li);
+  });
+  const row = document.createElement("div"); row.className = "row";
+  const b = document.createElement("button"); b.className = "run"; b.textContent = "Check order";
+  const fbEl = document.createElement("div"); fbEl.className = "fb";
+  b.onclick = () => {
+    const got = [...ul.children].map(li => li.textContent);
+    const ok = got.every((t, i) => t === ORDER.right[i]);
+    fbEl.className = "fb " + (ok ? "ok" : "no");
+    fbEl.innerHTML = ok
+      ? "Correct. Note that both tables must be read before the join, and the join must happen before you group."
+      : "Not yet. Ask of each line: what does it need to already exist? <code>library()</code> first, then the two reads, then the join, then the summary.";
+    answered++; if (ok) score++;
+  };
+  row.appendChild(b);
+  c.append(ul, row, fbEl);
+  document.getElementById("order").appendChild(c);
+})();
+
+// --- Free console -----------------------------------------------------------
+const freeOut = document.getElementById("freeOut");
+const freeRun = document.getElementById("freeRun");
+freeRun.onclick = async () => {
+  freeRun.disabled = true;
+  if (await needR()) {
+    try { show(freeOut, await runR(document.getElementById("freeCode").value), false); }
+    catch (e) { show(freeOut, String(e), true); }
+  } else {
+    show(freeOut, "R is not available in this browser.", true);
+  }
+  freeRun.disabled = false;
+};
+document.getElementById("freeCode").addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); freeRun.click(); }
+});
+document.getElementById("freeReset").onclick = async () => {
+  if (!(await needR())) return;
+  await engine.webR.evalRVoid(SETUP_R);
+  show(freeOut, "Tables restored to their original state.", false);
+};
+
+boot();
+</script>
+</body>
+</html>
