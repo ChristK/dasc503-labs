@@ -107,6 +107,10 @@
   .ds-scroll { max-height:340px; overflow:auto; border:1px solid var(--line); border-radius:5px;
                background:#fff; }
   .ds-scroll table.mini { margin:0; width:100%; }
+  .ds-scrollhint { display:none; font-size:.84rem; color:var(--ink); background:#FFF6E5;
+                   border-left:3px solid var(--orange); padding:5px 10px; margin:0 0 7px;
+                   border-radius:0 4px 4px 0; }
+  .ds-scrollhint.show { display:block; }
   .ds-scroll th { position:sticky; top:0; z-index:1; }
   .ds-scroll td.num, .ds-scroll th.num { text-align:right; }
   .ds-scroll tr:nth-child(even) td { background:#F9FBFC; }
@@ -140,7 +144,7 @@ core ideas: <code>DT[i, j, by]</code>, joins, and <code>melt()</code>. Nothing y
 answer</strong> — several questions depend on the actual values. They open here without
 needing R, and each one can be downloaded to use in RStudio.</p>
 <div id="datasets"></div>
-<p class="hint">Note that <code>imd</code> has only 6 rows for 8 areas. That gap is real, and one of the questions below asks about it.</p>
+<p class="hint">Note that <code>imd</code> has only 3 rows for 5 areas. That gap is real, and one of the questions below asks about it.</p>
 
 <h2>1 · Predict, then run</h2>
 <p class="sub">Commit to an answer first. Then run the real code and see.</p>
@@ -183,9 +187,9 @@ under the Open Government Licence v3.0. R runs entirely in your browser via
 // ===========================================================================
 //  Embedded data (real OHID Fingertips extracts)
 // ===========================================================================
-const CSV_MORT = "area,year,sex,rate,deaths\nBarnsley,2022,Male,71.57,83\nBarnsley,2022,Persons,47.05,115\nBarnsley,2023,Male,69.92,83\nBarnsley,2023,Persons,44.84,112\nBarnsley,2024,Male,67.88,81\nBarnsley,2024,Persons,44.72,113\nBath and North East Somerset,2022,Male,58.04,51\nBath and North East Somerset,2022,Persons,38.66,71\nBath and North East Somerset,2023,Male,50.67,45\nBath and North East Somerset,2023,Persons,35.6,66\nBath and North East Somerset,2024,Male,44.16,40\nBath and North East Somerset,2024,Persons,31.09,59\nBlackpool,2022,Male,103.11,74\nBlackpool,2022,Persons,71.06,105\nBlackpool,2023,Male,112.99,81\nBlackpool,2023,Persons,74.65,111\nBlackpool,2024,Male,101.02,73\nBlackpool,2024,Persons,68.29,103\nCumberland,2022,Male,53.36,73\nCumberland,2022,Persons,35.85,101\nCumberland,2023,Male,55.62,77\nCumberland,2023,Persons,37.44,107\nCumberland,2024,Male,53.55,75\nCumberland,2024,Persons,36.09,105\nDorset,2022,Male,44.14,86\nDorset,2022,Persons,28.41,116\nDorset,2023,Male,46.66,92\nDorset,2023,Persons,30.66,127\nDorset,2024,Male,45.99,92\nDorset,2024,Persons,30.4,128\nKnowsley,2022,Male,80.52,58\nKnowsley,2022,Persons,54.66,82\nKnowsley,2023,Male,86.05,63\nKnowsley,2023,Persons,57.98,88\nKnowsley,2024,Male,74.32,55\nKnowsley,2024,Persons,51.83,79\nLiverpool,2022,Male,78.19,158\nLiverpool,2022,Persons,55.35,230\nLiverpool,2023,Male,83.66,171\nLiverpool,2023,Persons,59.87,248\nLiverpool,2024,Male,77.34,160\nLiverpool,2024,Persons,54.94,230\nWestminster,2022,Male,53.14,52\nWestminster,2022,Persons,34.55,70\nWestminster,2023,Male,55.06,55\nWestminster,2023,Persons,35.71,74\nWestminster,2024,Male,50.87,52\nWestminster,2024,Persons,33.85,72\n";
-const CSV_IMD = "area,imd\nBarnsley,29.568\nBath and North East Somerset,12.094\nBlackpool,45.032\nKnowsley,45.686\nLiverpool,41.126\nWestminster,21.842\n";
-const CSV_REGION = "area,region\nBarnsley,Yorkshire and the Humber\nBath and North East Somerset,South West\nBlackpool,North West\nCumberland,North West\nDorset,South West\nKnowsley,North West\nLiverpool,North West\nWestminster,London\n";
+const CSV_MORT = "area,year,sex,rate,deaths\nBlackpool,2023,Male,112.99,81\nBlackpool,2023,Persons,74.65,111\nBlackpool,2024,Male,101.02,73\nBlackpool,2024,Persons,68.29,103\nCumberland,2023,Male,55.62,77\nCumberland,2023,Persons,37.44,107\nCumberland,2024,Male,53.55,75\nCumberland,2024,Persons,36.09,105\nDorset,2023,Male,46.66,92\nDorset,2023,Persons,30.66,127\nDorset,2024,Male,45.99,92\nDorset,2024,Persons,30.4,128\nLiverpool,2023,Male,83.66,171\nLiverpool,2023,Persons,59.87,248\nLiverpool,2024,Male,77.34,160\nLiverpool,2024,Persons,54.94,230\nWestminster,2023,Male,55.06,55\nWestminster,2023,Persons,35.71,74\nWestminster,2024,Male,50.87,52\nWestminster,2024,Persons,33.85,72\n";
+const CSV_IMD = "area,imd\nBlackpool,45.032\nLiverpool,41.126\nWestminster,21.842\n";
+const CSV_REGION = "area,region\nBlackpool,North West\nCumberland,North West\nDorset,South West\nLiverpool,North West\nWestminster,London\n";
 
 // ===========================================================================
 //  webR boot. Version is PINNED so a breaking change cannot land mid-term.
@@ -428,16 +432,16 @@ const PREDICT = [
   {
     code: `mort[sex == "Persons" & rate > 50]`,
     q: "How many rows come back?",
-    opts: ["3", "6", "9", "12"], right: 2,
-    why: "Nine. Blackpool, Knowsley and Liverpool each exceed 50 in all three years. " +
-         "Note the filter keeps ROWS, and returns a data.table, never a bare vector."
+    opts: ["2", "4", "6", "10"], right: 1,
+    why: "Four. Blackpool and Liverpool exceed 50 in both years; Cumberland, Dorset and " +
+         "Westminster never do. Note the filter keeps whole ROWS, and returns a data.table."
   },
   {
     code: `mort[, .N, by = sex]`,
     q: "What shape is the result?",
-    opts: ["a single number", "2 rows × 2 columns", "48 rows × 2 columns", "2 rows × 1 column"],
+    opts: ["a single number", "2 rows × 2 columns", "20 rows × 2 columns", "2 rows × 1 column"],
     right: 1,
-    why: "One row per group, and two columns: the grouping column `sex`, plus `N`. " +
+    why: "One row per group (Male and Persons, 10 rows each), and two columns: the grouping column `sex`, plus `N`. " +
          "`by` always puts the grouping column in the output."
   },
   {
@@ -552,22 +556,22 @@ const MCQ = [
 // ===========================================================================
 const FILL = [
   {
-    q: "Keep only the rows for males in 2024. (There are 8.)",
+    q: "Keep only the rows for males in 2024. (There are 5.)",
     stub: `mort[____, .N]`,
     check: `mort[sex == "Male" & year == 2024, .N]`,
     hint: "Two conditions joined with &.",
   },
   {
-    q: "Count the rows for each area. Every area should show 6.",
+    q: "Count the rows for each area. Every area should show 4.",
     stub: `mort[, ____, by = area]`,
     check: `mort[, .N, by = area]`,
     hint: "There is a special symbol for the number of rows in a group.",
   },
   {
-    q: "Blackpool's rate exceeds 70 in exactly two of the three years, for persons. Filter to find them — mind the boundary.",
-    stub: `mort[area == "Blackpool" & sex == "Persons" & ____, .N]`,
-    check: `mort[area == "Blackpool" & sex == "Persons" & rate > 70, .N]`,
-    hint: "2022 is 71.06 and 2023 is 74.65, but 2024 is 68.29. Strict or non-strict?",
+    q: "How many rows record <em>at least</em> 92 deaths? Mind the boundary: \u201cat least 92\u201d includes 92 itself.",
+    stub: `mort[____, .N]`,
+    check: `mort[deaths >= 92, .N]`,
+    hint: "Look at Dorset's two Male rows. Should they be counted?",
   },
   {
     q: "Attach each area's region to the 2024 persons rows, keeping every one of those rows.",
@@ -604,19 +608,19 @@ const BUGS = [
     ]
   },
   {
-    code: `imd[mort, on = "area"]\n# expected 8 areas, got 48 rows`,
+    code: `imd[mort, on = "area"]\n# expected 5 areas, got 20 rows`,
     q: "What has gone wrong here?",
     opts: [
       "the join key is misspelled",
-      "nothing is wrong — mort has 48 rows, and a join returns the inside table's rows",
+      "nothing is wrong — mort has 20 rows, and a join returns the inside table's rows",
       "imd needs a key set first",
       "it should be nomatch = NULL"
     ], right: 1,
     fb: [
       "The key is fine; both tables have an `area` column.",
-      "Correct. mort has 48 rows and mort is inside the brackets, so 48 rows come back. The expectation was wrong, not the code.",
+      "Correct. mort has 20 rows and mort is inside the brackets, so 20 rows come back. The expectation was wrong, not the code.",
       "Keys are not required — on= does the job without one.",
-      "That would DROP rows, giving fewer than 48, not the 8 that were expected."
+      "That would DROP the 8 rows for areas with no IMD score, leaving 12 \u2014 still not the 5 that were expected."
     ]
   },
   {
@@ -658,7 +662,7 @@ const DATASETS = [
   { name: "mort", csv: CSV_MORT, num: ["year", "rate", "deaths"],
     dict: [
       ["area",   "upper-tier local authority in England"],
-      ["year",   "calendar year, 2022\u20132024"],
+      ["year",   "calendar year, 2023 or 2024"],
       ["sex",    "<code>Male</code> or <code>Persons</code> (both sexes combined)"],
       ["rate",   "alcohol-related deaths, directly standardised rate per 100,000"],
       ["deaths", "number of alcohol-related deaths"] ] },
@@ -694,11 +698,18 @@ function renderDatasets() {
       `<span class="cols">${head.join(", ")}</span></summary>` +
       `<div class="ds-body">` +
       `<ul class="ds-dict">${d.dict.map(([c, t]) => `<li><code>${c}</code>: ${t}</li>`).join("")}</ul>` +
+      `<p class="ds-scrollhint">\u2195 This table scrolls \u2014 scroll inside it to see all ${rows.length} rows.</p>` +
       `<div class="ds-scroll"><table class="mini"><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table></div>` +
       `<a class="dl" href="${url}" download="${d.name}.csv">Download ${d.name}.csv</a>` +
       `<span class="hint"> \u2014 then in RStudio: <code>${d.name} &lt;- fread("${d.name}.csv")</code></span>` +
       `</div>`;
     host.appendChild(el);
+    el.addEventListener("toggle", () => {
+      if (!el.open) return;
+      const box = el.querySelector(".ds-scroll");
+      el.querySelector(".ds-scrollhint")
+        .classList.toggle("show", box.scrollHeight > box.clientHeight + 2);
+    });
   }
 }
 
