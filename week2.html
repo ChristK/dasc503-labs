@@ -95,6 +95,24 @@
   /* Shown in the raw HTML and removed by script once the page has rendered.
      If scripts are blocked, it is the only thing the student sees, so the page
      is never silently blank. */
+  details.ds { border:1px solid var(--line); border-radius:7px; background:var(--panel);
+               margin:9px 0; }
+  details.ds > summary { cursor:pointer; padding:10px 14px; font-size:.93rem; list-style-position:inside; }
+  details.ds > summary code { font-weight:700; color:var(--blue); }
+  details.ds > summary .cols { color:var(--muted); font-family:var(--mono); font-size:.8rem; margin-left:6px; }
+  details.ds[open] > summary { border-bottom:1px solid var(--line); }
+  .ds-body { padding:10px 14px 14px; }
+  .ds-dict { font-size:.85rem; margin:0 0 9px; padding-left:18px; }
+  .ds-dict li { margin:2px 0; }
+  .ds-scroll { max-height:340px; overflow:auto; border:1px solid var(--line); border-radius:5px;
+               background:#fff; }
+  .ds-scroll table.mini { margin:0; width:100%; }
+  .ds-scroll th { position:sticky; top:0; z-index:1; }
+  .ds-scroll td.num, .ds-scroll th.num { text-align:right; }
+  .ds-scroll tr:nth-child(even) td { background:#F9FBFC; }
+  a.dl { display:inline-block; margin-top:9px; font-size:.85rem; color:var(--blue); }
+  .datalinks { font-size:.82rem; color:var(--muted); margin:-2px 0 8px; }
+  .datalinks a { color:var(--blue); cursor:pointer; margin-right:8px; font-family:var(--mono); }
   #noscript-notice { border:1px solid var(--orange); background:#FFF6E5; border-radius:6px;
                      padding:12px 15px; margin:0 0 16px; font-size:.92rem; }
   #noscript-notice strong { display:block; margin-bottom:4px; }
@@ -116,15 +134,12 @@ core ideas: <code>DT[i, j, by]</code>, joins, and <code>melt()</code>. Nothing y
 
 <div id="status">Loading…</div>
 
-<p style="font-size:.9rem">Three small tables are loaded and ready. All figures are real:
-alcohol-related mortality for eight English local authorities (OHID Fingertips).</p>
-
-<table class="mini">
-<tr><th>table</th><th>columns</th><th>rows</th></tr>
-<tr><td>mort</td><td>area, year, sex, rate, deaths</td><td>48</td></tr>
-<tr><td>imd</td><td>area, imd</td><td>6</td></tr>
-<tr><td>region</td><td>area, region</td><td>8</td></tr>
-</table>
+<h2 id="data">The data</h2>
+<p class="sub">Three small tables, already loaded in R as <code>mort</code>, <code>imd</code> and
+<code>region</code>. All figures are real (OHID Fingertips). <strong>Look at them before you
+answer</strong> — several questions depend on the actual values. They open here without
+needing R, and each one can be downloaded to use in RStudio.</p>
+<div id="datasets"></div>
 <p class="hint">Note that <code>imd</code> has only 6 rows for 8 areas. That gap is real, and one of the questions below asks about it.</p>
 
 <h2>1 · Predict, then run</h2>
@@ -250,6 +265,15 @@ async function startOnce(mirror) {
   if (engine.loud) setStatus("", "R is running. Fetching <code>data.table</code>\u2026");
   await withTimeout(w.installPackages(["data.table"]), 120000, "installing data.table");
   await w.evalRVoid(SETUP_R);
+  // Report what is actually running rather than hard-coding it. WEBR_VERSION is
+  // the webR release; the R inside it has its own version (webR 0.6.0 ships
+  // R 4.6.0), and a hard-coded "4.6.0" would go silently stale on the next bump.
+  try {
+    const v = (await w.evalRString(
+      'paste(paste(R.version$major, R.version$minor, sep = "."), ' +
+      'as.character(packageVersion("data.table")), sep = "|")')).split("|");
+    engine.rVersion = v[0]; engine.dtVersion = v[1];
+  } catch { /* cosmetic only: never let this block start-up */ }
   return w;
 }
 
@@ -295,7 +319,10 @@ function getR({ quiet = false } = {}) {
 }
 
 function showReady() {
-  setStatus("ready", `Ready \u2014 R ${WEBR_VERSION} with <code>data.table</code>, running in your browser.`);
+  setStatus("ready", engine.rVersion
+    ? `Ready \u2014 R ${engine.rVersion} with <code>data.table</code> ${engine.dtVersion}, ` +
+      `running in your browser via webR ${WEBR_VERSION}.`
+    : `Ready \u2014 R with <code>data.table</code>, running in your browser via webR ${WEBR_VERSION}.`);
   document.getElementById("freeHint").textContent = "Shift+Enter also runs.";
 }
 
@@ -625,6 +652,74 @@ const ORDER = {
 };
 
 // ===========================================================================
+//  The data: rendered from the embedded CSVs, so it works with or without R
+// ===========================================================================
+const DATASETS = [
+  { name: "mort", csv: CSV_MORT, num: ["year", "rate", "deaths"],
+    dict: [
+      ["area",   "upper-tier local authority in England"],
+      ["year",   "calendar year, 2022\u20132024"],
+      ["sex",    "<code>Male</code> or <code>Persons</code> (both sexes combined)"],
+      ["rate",   "alcohol-related deaths, directly standardised rate per 100,000"],
+      ["deaths", "number of alcohol-related deaths"] ] },
+  { name: "imd", csv: CSV_IMD, num: ["imd"],
+    dict: [
+      ["area", "upper-tier local authority"],
+      ["imd",  "Index of Multiple Deprivation 2015 score; higher means more deprived"] ] },
+  { name: "region", csv: CSV_REGION, num: [],
+    dict: [
+      ["area",   "upper-tier local authority"],
+      ["region", "English region the authority sits in"] ] }
+];
+
+/** Minimal CSV reader. These files contain no quoted fields; refuse if one appears. */
+function parseCSV(text) {
+  const lines = text.trim().split("\n");
+  if (lines.some(l => l.includes('"'))) throw new Error("quoted CSV not supported");
+  return { head: lines[0].split(","), rows: lines.slice(1).map(l => l.split(",")) };
+}
+
+function renderDatasets() {
+  const host = document.getElementById("datasets");
+  for (const d of DATASETS) {
+    const { head, rows } = parseCSV(d.csv);
+    const th = head.map(h => `<th${d.num.includes(h) ? ' class="num"' : ""}>${esc(h)}</th>`).join("");
+    const tb = rows.map(r => "<tr>" + r.map((v, i) =>
+      `<td${d.num.includes(head[i]) ? ' class="num"' : ""}>${esc(v)}</td>`).join("") + "</tr>").join("");
+    const url = URL.createObjectURL(new Blob([d.csv], { type: "text/csv" }));
+    const el = document.createElement("details");
+    el.className = "ds"; el.id = "data-" + d.name;
+    el.innerHTML =
+      `<summary><code>${d.name}</code> \u2014 ${rows.length} rows` +
+      `<span class="cols">${head.join(", ")}</span></summary>` +
+      `<div class="ds-body">` +
+      `<ul class="ds-dict">${d.dict.map(([c, t]) => `<li><code>${c}</code>: ${t}</li>`).join("")}</ul>` +
+      `<div class="ds-scroll"><table class="mini"><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table></div>` +
+      `<a class="dl" href="${url}" download="${d.name}.csv">Download ${d.name}.csv</a>` +
+      `<span class="hint"> \u2014 then in RStudio: <code>${d.name} &lt;- fread("${d.name}.csv")</code></span>` +
+      `</div>`;
+    host.appendChild(el);
+  }
+}
+
+/** "Look at the data" links for any table a question's code refers to. */
+function dataLinks(code) {
+  const used = DATASETS.map(d => d.name).filter(n => new RegExp("\\b" + n + "\\b").test(code));
+  if (!used.length) return "";
+  return `<div class="datalinks">look at the data: ` +
+         used.map(n => `<a class="datalink" data-ds="${n}">${n}</a>`).join("") + `</div>`;
+}
+
+document.addEventListener("click", e => {
+  const a = e.target.closest("a.datalink");
+  if (!a) return;
+  const d = document.getElementById("data-" + a.dataset.ds);
+  if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+});
+
+renderDatasets();
+
+// ===========================================================================
 //  Rendering
 // ===========================================================================
 let score = 0, answered = 0;
@@ -662,7 +757,7 @@ function optionSet(opts, right, fb, onDone) {
 
 // --- Activity 1 -------------------------------------------------------------
 PREDICT.forEach((p, idx) => {
-  const c = card(`<p class="q"><span class="tag">predict</span>${p.q}</p><pre>${esc(p.code)}</pre>`, true);
+  const c = card(`<p class="q"><span class="tag">predict</span>${p.q}</p><pre>${esc(p.code)}</pre>${dataLinks(p.code)}`, true);
   const { wrap, fbEl } = optionSet(p.opts, p.right, null, () => { runBtn.disabled = false; });
   c.appendChild(wrap); c.appendChild(fbEl);
   const row = document.createElement("div"); row.className = "row";
@@ -696,7 +791,7 @@ MCQ.forEach(m => {
 
 // --- Activity 3 -------------------------------------------------------------
 FILL.forEach(f => {
-  const c = card(`<p class="q"><span class="tag">complete</span>${f.q}</p>`, true);
+  const c = card(`<p class="q"><span class="tag">complete</span>${f.q}</p>${dataLinks(f.check)}`, true);
   const ta = document.createElement("textarea");
   ta.rows = 2; ta.value = f.stub;
   const row = document.createElement("div"); row.className = "row";
@@ -732,7 +827,7 @@ FILL.forEach(f => {
 
 // --- Activity 4 -------------------------------------------------------------
 BUGS.forEach(g => {
-  const c = card(`<p class="q"><span class="tag grey">debug</span>${g.q}</p><pre>${esc(g.code)}</pre>`);
+  const c = card(`<p class="q"><span class="tag grey">debug</span>${g.q}</p><pre>${esc(g.code)}</pre>${dataLinks(g.code)}`);
   const { wrap, fbEl } = optionSet(g.opts, g.right, g.fb);
   c.appendChild(wrap); c.appendChild(fbEl);
   document.getElementById("bug").appendChild(c);
