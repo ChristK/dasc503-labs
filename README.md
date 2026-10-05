@@ -8,6 +8,7 @@ one page per week, published with GitHub Pages:
 | Week | Page |
 |---|---|
 | 1 — Introduction to R | [week1.html](https://christk.github.io/dasc503-labs/week1.html) |
+| 2 — Working with tables using `data.table` | [week2.html](https://christk.github.io/dasc503-labs/week2.html) |
 
 Each page is a single self-contained HTML file. R runs **in the student's
 browser** via [webR](https://docs.r-wasm.org/webr/latest/) (R compiled to
