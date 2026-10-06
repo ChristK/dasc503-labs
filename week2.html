@@ -187,8 +187,8 @@ under the Open Government Licence v3.0. R runs entirely in your browser via
 // ===========================================================================
 //  Embedded data (real OHID Fingertips extracts)
 // ===========================================================================
-const CSV_MORT = "area,year,sex,rate,deaths\nBlackpool,2023,Male,112.99,81\nBlackpool,2023,Persons,74.65,111\nBlackpool,2024,Male,101.02,73\nBlackpool,2024,Persons,68.29,103\nCumberland,2023,Male,55.62,77\nCumberland,2023,Persons,37.44,107\nCumberland,2024,Male,53.55,75\nCumberland,2024,Persons,36.09,105\nDorset,2023,Male,46.66,92\nDorset,2023,Persons,30.66,127\nDorset,2024,Male,45.99,92\nDorset,2024,Persons,30.4,128\nLiverpool,2023,Male,83.66,171\nLiverpool,2023,Persons,59.87,248\nLiverpool,2024,Male,77.34,160\nLiverpool,2024,Persons,54.94,230\nWestminster,2023,Male,55.06,55\nWestminster,2023,Persons,35.71,74\nWestminster,2024,Male,50.87,52\nWestminster,2024,Persons,33.85,72\n";
-const CSV_IMD = "area,imd\nBlackpool,45.032\nLiverpool,41.126\nWestminster,21.842\n";
+const CSV_MORT = "area,year,sex,rate,deaths\nBlackpool,2023,Male,112.99,80\nBlackpool,2023,Persons,76.14,112\nBlackpool,2024,Male,107.8,79\nBlackpool,2024,Persons,70.56,108\nCumberland,2023,Male,73.69,108\nCumberland,2023,Persons,51.21,154\nCumberland,2024,Male,67.93,99\nCumberland,2024,Persons,44.22,136\nDorset,2023,Male,48.99,118\nDorset,2023,Persons,31.96,164\nDorset,2024,Male,52.77,125\nDorset,2024,Persons,33.8,171\nLiverpool,2023,Male,91.9,178\nLiverpool,2023,Persons,59.87,248\nLiverpool,2024,Male,82.07,160\nLiverpool,2024,Persons,54.94,230\nWestminster,2023,Male,47.77,37\nWestminster,2023,Persons,28.9,47\nWestminster,2024,Male,45.57,36\nWestminster,2024,Persons,30.38,51\n";
+const CSV_IMD = "area,imd\nBlackpool,41.997\nLiverpool,41.126\nWestminster,27.686\n";
 const CSV_REGION = "area,region\nBlackpool,North West\nCumberland,North West\nDorset,South West\nLiverpool,North West\nWestminster,London\n";
 
 // ===========================================================================
@@ -432,9 +432,9 @@ const PREDICT = [
   {
     code: `mort[sex == "Persons" & rate > 50]`,
     q: "How many rows come back?",
-    opts: ["2", "4", "6", "10"], right: 1,
-    why: "Four. Blackpool and Liverpool exceed 50 in both years; Cumberland, Dorset and " +
-         "Westminster never do. Note the filter keeps whole ROWS, and returns a data.table."
+    opts: ["3", "5", "7", "10"], right: 1,
+    why: "Five. Blackpool and Liverpool are above 50 in both years, and Cumberland in 2023 only " +
+         "(51.21); Dorset and Westminster never are. Note the filter keeps whole ROWS, and returns a data.table."
   },
   {
     code: `mort[, .N, by = sex]`,
@@ -568,10 +568,10 @@ const FILL = [
     hint: "There is a special symbol for the number of rows in a group.",
   },
   {
-    q: "How many rows record <em>at least</em> 92 deaths? Mind the boundary: \u201cat least 92\u201d includes 92 itself.",
+    q: "How many rows record <em>at least</em> 108 deaths? Mind the boundary: \u201cat least 108\u201d includes 108 itself.",
     stub: `mort[____, .N]`,
-    check: `mort[deaths >= 92, .N]`,
-    hint: "Look at Dorset's two Male rows. Should they be counted?",
+    check: `mort[deaths >= 108, .N]`,
+    hint: "Two rows record exactly 108 deaths (Blackpool 2024, persons; Cumberland 2023, male). Should they be counted?",
   },
   {
     q: "Attach each area's region to the 2024 persons rows, keeping every one of those rows.",
